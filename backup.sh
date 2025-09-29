@@ -2,17 +2,40 @@
 set -euo pipefail
 
 DATE=$(date +%F_%H%M)
+MYSQL_HOST="sql"
+MYSQL_USER="root"
+MYSQL_PASS="${MYSQL_ROOT_PASSWORD}"
 S3="s3://${AWS_BACKUP_BUCKET}/${ENVIRONMENT}"
+OUTDIR="/tmp/mysql-backup-${DATE}"
 
-mysqldump --host=sql -uroot -p"${MYSQL_ROOT_PASSWORD}" --plugin-dir=/usr/lib/mariadb/plugin \
-  --all-databases --single-transaction --routines --triggers --events \
-  | gzip > "/tmp/mysql-${DATE}.sql.gz"
+mkdir -p "$OUTDIR"
 
-aws s3 cp "/tmp/mysql-${DATE}.sql.gz" "${S3}/mysql/"
+DBS=$(mysql -h"$MYSQL_HOST" -u"$MYSQL_USER" -p"$MYSQL_PASS" \
+      -e "SHOW DATABASES;" \
+      | grep -Ev "^(Database|information_schema|performance_schema|mysql|sys)$")
 
-mongodump --host nosql --username "${MONGO_USER}" --password "${MONGO_PASSWORD}" \
-  --authenticationDatabase admin --gzip --archive="/tmp/mongo-${DATE}.archive.gz" 
+for DB in $DBS; do
+  echo "Dumping $DB..."
+  mysqldump --host="$MYSQL_HOST" -u"$MYSQL_USER" -p"$MYSQL_PASS" \
+    --single-transaction --routines --triggers --events \
+    "$DB" \
+    | gzip > "$OUTDIR/${DB}.sql.gz"
+done
 
-aws s3 cp "/tmp/mongo-${DATE}.archive.gz" "${S3}/mongo/"
+tar -czf "/tmp/mysql-backup-${DATE}.tar.gz" -C "$OUTDIR" .
+echo "Backup generated in /tmp/mysql-backup-${DATE}.tar.gz"
 
-rm -f /tmp/mysql-${DATE}.sql.gz /tmp/mongo-${DATE}.archive.gz
+aws s3 cp "/tmp/mysql-backup-${DATE}.tar.gz" "${S3}/mysql/"
+
+rm -rf "$OUTDIR" "$OUTFILE"
+
+if [[ "${SKIP_MYSQL_DUMP:-0}" != "1" ]]; then
+
+  mongodump --host nosql --username "${MONGO_USER}" --password "${MONGO_PASSWORD}" \
+    --authenticationDatabase admin --gzip --archive="/tmp/mongo-${DATE}.archive.gz" 
+
+  aws s3 cp "/tmp/mongo-${DATE}.archive.gz" "${S3}/mongo/"
+  rm /tmp/mongo-${DATE}.archive.gz
+fi
+
+exit 1
