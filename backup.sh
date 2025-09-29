@@ -1,5 +1,6 @@
 #!/bin/sh
 set -euo pipefail
+set -x
 
 DATE=$(date +%F_%H%M)
 MYSQL_HOST="sql"
@@ -10,10 +11,10 @@ OUTDIR="/tmp/mysql-backup-${DATE}"
 
 mkdir -p "$OUTDIR"
 
-DBS=$(mysql -h"$MYSQL_HOST" -u"$MYSQL_USER" -p"$MYSQL_PASS" \
-      -e "SHOW DATABASES;" \
-      | grep -Ev "^(Database|information_schema|performance_schema|mysql|sys)$")
-
+DBS=`mysql -h"$MYSQL_HOST" -u"$MYSQL_USER" -p"$MYSQL_PASS" \
+     -e "SHOW DATABASES;" \
+     | grep -Ev "^(Database|information_schema|performance_schema|mysql|sys)$"`
+     
 for DB in $DBS; do
   echo "Dumping $DB..."
   mysqldump --host="$MYSQL_HOST" -u"$MYSQL_USER" -p"$MYSQL_PASS" \
@@ -29,7 +30,7 @@ aws s3 cp "/tmp/mysql-backup-${DATE}.tar.gz" "${S3}/mysql/"
 
 rm -rf "$OUTDIR" "$OUTFILE"
 
-if [[ "${SKIP_MYSQL_DUMP:-0}" != "1" ]]; then
+if [[ "${SKIP_MONGO_DUMP:-0}" != "1" ]]; then
 
   mongodump --host nosql --username "${MONGO_USER}" --password "${MONGO_PASSWORD}" \
     --authenticationDatabase admin --gzip --archive="/tmp/mongo-${DATE}.archive.gz" 
