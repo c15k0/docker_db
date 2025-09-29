@@ -76,6 +76,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       MONGO_USER: ${MONGO_ROOT_USER:-root}
       MONGO_PASSWORD: ${MONGO_ROOT_PASSWORD:-root}
+      SKIP_MONGO_DUMP: ${SKIP_MONGO_DUMP:-0}
       TZ: ${TZ:-UTC}
     volumes:
       - ./backup.sh:/opt/backup:ro
