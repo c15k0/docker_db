@@ -1,0 +1,94 @@
+services:
+  sql:
+    image: mysql:8
+    restart: always
+    ports:
+      - "${DB_EXTERNAL_PORT:-3306}:3306"
+    networks:
+      - server-network
+    environment:
+      MYSQL_USER: ${MYSQL_USER:-checks}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-checks}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-checks}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ${MYSQL_DATA_PATH:-db_data}:/var/lib/mysql
+      - ./mysql:/etc/mysql/conf.d
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    deploy:
+      resources:
+        limits:
+          cpus: "${MYSQL_CPU:-1}"
+          memory: "${MYSQL_RAM:-2G}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  nosql:
+    image: mongo:8
+    restart: always
+    networks:
+      - server-network
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-checks}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-checks}
+      TZ: ${TZ:-UTC}
+    ports:
+      - "${NOSQL_EXTERNAL_PORT:-27017}:27017"
+    volumes:
+      - ${NOSQL_DATA_PATH:-nosql_data}:/data/db
+      - ./mongo/mongod.conf:/etc/mongod.conf:ro
+    healthcheck:
+      test: [ "CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "${NOSQL_CPU:-1}"
+          memory: "${NOSQL_RAM:-2G}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  backup:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      sql:
+        condition: service_healthy
+      nosql:
+        condition: service_healthy
+    networks: [server-network]
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-eu-west-1}
+      AWS_BACKUP_BUCKET: ${AWS_BACKUP_BUCKET}
+      ENVIRONMENT: ${ENVIRONMENT:-dev}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-checks}
+      MONGO_USER: ${MONGO_ROOT_USER:-checks}
+      MONGO_PASSWORD: ${MONGO_ROOT_PASSWORD:-checks}
+      TZ: ${TZ:-Europe/Madrid}
+    volumes:
+      - ./backup.sh:/opt/backup:ro
+    entrypoint: ["/bin/sh","-c",
+      "apk add --no-cache mongodb-tools aws-cli tzdata mariadb-client mariadb-connector-c \
+      && sh /opt/backup"
+    ]
+    
+networks:
+  server-network:
+    driver: bridge
+
+volumes:
+  db_data:
+  nosql_data:
