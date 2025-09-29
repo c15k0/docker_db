@@ -1,6 +1,5 @@
 #!/bin/sh
 set -euo pipefail
-set -x
 
 DATE=$(date +%F_%H%M)
 MYSQL_HOST="sql"
