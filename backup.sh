@@ -14,7 +14,7 @@ mkdir -p "$OUTDIR"
 DBS=`mysql -h"$MYSQL_HOST" -u"$MYSQL_USER" -p"$MYSQL_PASS" \
      -e "SHOW DATABASES;" \
      | grep -Ev "^(Database|information_schema|performance_schema|mysql|sys)$"`
-     
+
 for DB in $DBS; do
   echo "Dumping $DB..."
   mysqldump --host="$MYSQL_HOST" -u"$MYSQL_USER" -p"$MYSQL_PASS" \
@@ -28,7 +28,7 @@ echo "Backup generated in /tmp/mysql-backup-${DATE}.tar.gz"
 
 aws s3 cp "/tmp/mysql-backup-${DATE}.tar.gz" "${S3}/mysql/"
 
-rm -rf "$OUTDIR" "$OUTFILE"
+rm -rf "$OUTDIR"
 
 if [[ "${SKIP_MONGO_DUMP:-0}" != "1" ]]; then
 
