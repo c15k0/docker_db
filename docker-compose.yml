@@ -1,6 +1,6 @@
 services:
   sql:
-    image: mysql:8
+    image: mysql:8.3
     restart: always
     ports:
       - "${DB_EXTERNAL_PORT:-3306}:3306"
@@ -61,7 +61,6 @@ services:
 
   backup:
     image: alpine:3.20
-    restart: unless-stopped
     depends_on:
       sql:
         condition: service_healthy
